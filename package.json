@@ -1,9 +1,11 @@
 {
   "name": "calculator",
   "version": "1.0.0",
-  "description": "a calculator only supports  + - * / and variable",
+  "description": "a calculator only supports  + - * / ^, excel-style range references and some functions",
   "main": "index.ts",
-  "scripts": {},
+  "scripts": {
+    "test": "npx jest"
+  },
   "keywords": [],
   "author": "",
   "license": "MIT",
