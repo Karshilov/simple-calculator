@@ -4,7 +4,7 @@
   "description": "a calculator only supports  + - * / ^, excel-style range references and some functions",
   "main": "index.ts",
   "scripts": {
-    "test": "npx jest"
+    "test": "npx jest --watch --verbose false"
   },
   "keywords": [],
   "author": "",

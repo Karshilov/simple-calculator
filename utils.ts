@@ -1,11 +1,4 @@
-export type ValueType =
-  | string
-  | number
-  | (string | number)[]
-  | string[]
-  | number[]
-  | null
-  | ValueType[];
+import { BaseValue, VALUE_TYPE } from "./types";
 
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -21,26 +14,11 @@ export const nextX = (s: string): string => {
   return s.slice(0, s.length - 1) + nextCharacter;
 };
 
-export const FUNCTION_MAP: { [key: string]: any } = {
-  SUM: (values: any[]) =>
-    values
-      .flat()
-      .slice(1)
-      .reduce((a, b) => (b ? a + b : a), values.flat()[0]),
-  AVERAGE: (values: any[]) =>
-    values
-      .flat()
-      .slice(1)
-      .reduce((a, b) => (b ? a + b : a), values.flat()[0]) /
-    values.flat().length,
-  MAX: (values: any[]) =>
-    values
-      .flat()
-      .slice(1)
-      .reduce((a, b) => (b > a ? b : a), values.flat()[0]),
-  MIN: (values: any[]) =>
-    values
-      .flat()
-      .slice(1)
-      .reduce((a, b) => (b < a ? b : a), values.flat()[0]),
+export const unboxValue = (value: BaseValue) => {
+  switch (value.type) {
+    case VALUE_TYPE.COLLECTION:
+      return value.getValue().map((v: BaseValue) => unboxValue(v));
+    default:
+      return value.getValue();
+  }
 };

@@ -1,12 +1,16 @@
+import { END_TOKEN, Lexer, TokenNode, Tokens, TokenStream } from "./lexer";
 import {
-  END_TOKEN,
-  FUNCTION_LIST,
-  Lexer,
-  TokenNode,
-  Tokens,
-  TokenStream,
-} from "./lexer";
-import { FUNCTION_MAP, nextX, ValueType } from "./utils";
+  BinaryExpr,
+  Expr,
+  FunctionExpr,
+  NumberExpr,
+  RangeRefExpr,
+  ReferenceExpr,
+  StringExpr,
+  UnaryExpr,
+} from "./types";
+
+const END_TOKEN_NODE = new TokenNode(Tokens.Empty, END_TOKEN);
 
 /**
  * E  ->  TE'
@@ -16,198 +20,15 @@ import { FUNCTION_MAP, nextX, ValueType } from "./utils";
  * U -> SU'
  * U' -> ^SU' | ε
  * S  ->  -F | F
- * F  -> (E) | FUNCTION(A) | identifier | number
+ * F  -> (E) | FUNCTION(A) | identifier | number | string
  * A -> EA' | ε
  * A' -> ,EA' | :A' | ε
  */
-
-abstract class Expr {
-  protected op: TokenNode;
-  protected children: Expr[];
-
-  public abstract evaluate(ctx: Map<string, any>): ValueType;
-
-  constructor(op: TokenNode, children: Expr[]) {
-    this.op = op;
-    this.children = children;
-  }
-}
-
-class BinaryExpr extends Expr {
-  protected leftExpr: Expr;
-  protected rightExpr: Expr;
-
-  constructor(op: TokenNode, children: Expr[]) {
-    super(op, children);
-    if (children.length !== 2)
-      throw new Error(
-        `binary expression must have 2 children: ${children.length}`
-      );
-    this.leftExpr = children[0];
-    this.rightExpr = children[1];
-  }
-
-  public evaluate(ctx: Map<string, any>): ValueType {
-    let left = this.leftExpr.evaluate(ctx);
-    let right = this.rightExpr.evaluate(ctx);
-
-    if (left instanceof Array || right instanceof Array)
-      throw new Error(`params for binary op shouldn't be array`);
-
-    let operator = this.op.tokenContent;
-    switch (operator) {
-      case "+":
-        return ((left as any) + right) as any;
-      case "-":
-        return (left as any) - (right as any);
-      case "*":
-        left = Number(left);
-        right = Number(right);
-        return left * right;
-      case "/":
-        left = Number(left);
-        right = Number(right);
-        return left / right;
-      case "^":
-        left = Number(left);
-        right = Number(right);
-        return Math.pow(left, right);
-    }
-    return null;
-  }
-}
-
-class UnaryExpr extends Expr {
-  protected rightExpr: Expr;
-
-  constructor(op: TokenNode, children: Expr[]) {
-    super(op, children);
-    if (children.length !== 1)
-      throw new Error(`unary expression must have exactly one child`);
-    this.rightExpr = children[0];
-  }
-
-  public evaluate(ctx: Map<string, any>): ValueType {
-    let value = this.rightExpr.evaluate(ctx);
-
-    if (this.op.tokenType === Tokens.Empty) {
-      return value;
-    } else if (this.op.tokenContent === "-") {
-      return -(value || 0);
-    } else {
-      return NaN;
-    }
-  }
-}
-
-class NumberExpr extends Expr {
-  constructor(op: TokenNode, children: Expr[]) {
-    super(op, children);
-  }
-
-  public evaluate(ctx: Map<string, any>): ValueType {
-    if (typeof this.op.tokenContent === "number") {
-      return this.op.tokenContent;
-    }
-    return NaN;
-  }
-}
-
-class ReferenceExpr extends Expr {
-  constructor(op: TokenNode, children: Expr[]) {
-    super(op, children);
-  }
-
-  getId() {
-    if (typeof this.op.tokenContent === "number") {
-      throw new Error("invalid reference id");
-    }
-    return this.op.tokenContent;
-  }
-
-  public evaluate(ctx: Map<string, any>): ValueType {
-    if (typeof this.op.tokenContent === "number") {
-      throw new Error("invalid reference id");
-    }
-    if (ctx.get(this.op.tokenContent)) {
-      return ctx.get(this.op.tokenContent);
-    }
-    return NaN;
-  }
-}
-
-class RangeRefExpr extends Expr {
-  protected leftExpr: ReferenceExpr;
-  protected rightExpr: ReferenceExpr;
-
-  constructor(op: TokenNode, children: ReferenceExpr[]) {
-    super(op, children);
-    if (children.length !== 2)
-      throw new Error(
-        `range reference expression must have 2 children but it only got: ${children.length}`
-      );
-    this.leftExpr = children[0];
-    this.rightExpr = children[1];
-  }
-
-  public evaluate(ctx: Map<string, any>): ValueType {
-    let left = this.leftExpr.getId();
-    let right = this.rightExpr.getId();
-
-    const re = /^[A-Z]+_[1-9]+[0-9]*$/;
-
-    [left, right].forEach((refId) => {
-      if (!re.test(refId)) throw new Error(`invalid reference id: ${refId}`);
-    });
-
-    const [lx, ly] = left.split("_");
-    const [rx, ry] = right.split("_");
-
-    let minX = lx > rx ? rx : lx;
-    let maxX = lx > rx ? lx : rx;
-
-
-    let minY = Number(ly > ry ? ry : ly);
-    let maxY = Number(ly > ry ? ly : ry);
-
-    const result: any[] = [];
-
-    while (minX <= maxX) {
-      const curY = minY;
-      while (minY <= maxY) {
-        const currentId = minX + "_" + minY;
-        result.push(ctx.get(currentId) ?? null);
-        minY++;
-      }
-      minX = nextX(minX);
-      minY = curY;
-    }
-    return result;
-  }
-}
-
-class FunctionExpr extends Expr {
-  constructor(op: TokenNode, children: Expr[]) {
-    super(op, children);
-  }
-
-  public evaluate(ctx: Map<string, any>): ValueType {
-    const params: ValueType[] = [];
-    this.children.forEach((child) => params.push(child.evaluate(ctx)));
-    if (
-      typeof this.op.tokenContent === "number" ||
-      !FUNCTION_LIST.includes(this.op.tokenContent)
-    )
-      throw new Error(`invalid function name: '${this.op.tokenContent}`);
-    return FUNCTION_MAP[this.op.tokenContent](params);
-  }
-}
-
 export class Parser {
   private lexer: Lexer;
 
   private tokenStream?: TokenStream;
-  private current: TokenNode = new TokenNode(Tokens.Empty, END_TOKEN);
+  private current: TokenNode = END_TOKEN_NODE;
 
   constructor(lexer: Lexer) {
     this.lexer = lexer;
@@ -220,7 +41,8 @@ export class Parser {
   }
 
   private next() {
-    this.current = this.tokenStream?.next() || this.current;
+    const nextToken = this.tokenStream?.next();
+    this.current = nextToken || END_TOKEN_NODE;
   }
 
   public parseExpr(): Expr {
@@ -315,6 +137,11 @@ export class Parser {
       return new NumberExpr(token, []);
     }
 
+    if (token.tokenType === Tokens.String) {
+      this.next();
+      return new StringExpr(token, []);
+    }
+
     if (token.tokenType === Tokens.Reference) {
       this.next();
       return new ReferenceExpr(token, []);
@@ -369,6 +196,10 @@ export class Parser {
             prevExpr,
             nextExpr,
           ]);
+        } else {
+          throw new Error(
+            `Range selection can only be used between 2 reference expressions`
+          );
         }
       }
     }

@@ -1,6 +1,7 @@
 export enum Tokens {
   Reference,
   Number,
+  String,
   Delimiter,
   Operator,
   End,
@@ -15,7 +16,11 @@ export class TokenNode {
   tokenContent: string | number;
   tokenPosition: number = 0;
 
-  constructor(tokenType: Tokens, tokenContent: string | number, tokenPosition?: number) {
+  constructor(
+    tokenType: Tokens,
+    tokenContent: string | number,
+    tokenPosition?: number
+  ) {
     this.tokenType = tokenType;
     this.tokenContent = tokenContent;
     this.tokenPosition = tokenPosition ?? 0;
@@ -63,11 +68,21 @@ export class TokenStream {
       currentToken = this.readNumber();
     } else if (this.current?.match(/[a-zA-Z]/)) {
       currentToken = this.readReference();
+    } else if (this.current === `"`) {
+      currentToken = this.readString();
     } else if (this.delimiters.test(this.current || "")) {
-      currentToken = new TokenNode(Tokens.Delimiter, this.current || "", this.position);
+      currentToken = new TokenNode(
+        Tokens.Delimiter,
+        this.current || "",
+        this.position
+      );
       this.current = null;
     } else if (this.operators.test(this.current || "")) {
-      currentToken = new TokenNode(Tokens.Operator, this.current || "", this.position);
+      currentToken = new TokenNode(
+        Tokens.Operator,
+        this.current || "",
+        this.position
+      );
       this.current = null;
     }
 
@@ -134,6 +149,15 @@ export class TokenStream {
     if (FUNCTION_LIST.includes(value))
       return new TokenNode(Tokens.Function, value, this.position);
     return new TokenNode(Tokens.Reference, value, this.position);
+  }
+
+  readString(): TokenNode {
+    let value: string = "";
+    for (this.read(); this.current !== `"`; this.read()) {
+      value += this.current;
+    }
+    this.read();
+    return new TokenNode(Tokens.String, value, this.position);
   }
 }
 
